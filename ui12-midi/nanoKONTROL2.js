@@ -1,0 +1,288 @@
+const easymidi = require('easymidi');
+const WebSocket = require('ws');
+
+const ws = new WebSocket('ws://10.10.1.1/socket.io/?EIO=3&transport=websocket');
+
+ws.on('open', () => {
+  console.log('Connecté à la UI12');
+  console.log('=== BANK 1 ===');
+});
+
+ws.on('close', (code, reason) => {
+  console.log(`Déconnecté de la UI12 code=${code} reason=${reason}`);
+});
+
+ws.on('error', error => {
+  console.error('Erreur WebSocket:', error.message);
+});
+
+// Keep-alive Socket.IO
+setInterval(() => {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send('2::');
+  }
+}, 5000);
+
+const input = new easymidi.Input(
+  'nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 20:0'
+);
+
+let bank = 1;
+let autoPlayMode = false;
+
+const muteStates = {};
+const soloStates = {};
+
+function send(path, value) {
+  if (ws.readyState !== WebSocket.OPEN) {
+    console.log(`Commande ignorée, WebSocket non connecté: ${path} = ${value}`);
+    return;
+  }
+
+  ws.send(`3:::SETD^${path}^${value}`);
+}
+
+function sendRaw(command) {
+  if (ws.readyState !== WebSocket.OPEN) {
+    console.log(`Commande ignorée, WebSocket non connecté: ${command}`);
+    return;
+  }
+
+  ws.send(`3:::${command}`);
+}
+
+function setBank(newBank) {
+  bank = newBank;
+  console.log(`=== BANK ${bank} ===`);
+}
+
+function toggleState(store, key) {
+  store[key] = !store[key];
+  return store[key] ? 1 : 0;
+}
+
+function sendStereo(base, parameter, value) {
+  send(`${base}.0.${parameter}`, value);
+  send(`${base}.1.${parameter}`, value);
+}
+
+input.on('cc', msg => {
+  // =========================
+  // CHANGEMENT DE BANK
+  // =========================
+
+  // MARKER gauche -> bank 1
+  if (msg.controller === 61 && msg.value === 127) {
+    setBank(1);
+    return;
+  }
+
+  // MARKER droite -> bank 2
+  if (msg.controller === 62 && msg.value === 127) {
+    setBank(2);
+    return;
+  }
+
+  // =========================
+  // TRANSPORT PLAYER MP3
+  // actif dans toutes les banques
+  // =========================
+
+  // Play
+  if (msg.controller === 41 && msg.value === 127) {
+    sendRaw('MEDIA_PLAY');
+    console.log('Player: MEDIA_PLAY');
+    return;
+  }
+
+  // Stop
+  if (msg.controller === 42 && msg.value === 127) {
+    sendRaw('MEDIA_STOP');
+    console.log('Player: MEDIA_STOP');
+    return;
+  }
+
+  // Track précédent
+  if (msg.controller === 58 && msg.value === 127) {
+    sendRaw('MEDIA_PREV');
+    console.log('Player: MEDIA_PREV');
+    return;
+  }
+
+  // Track suivant
+  if (msg.controller === 59 && msg.value === 127) {
+    sendRaw('MEDIA_NEXT');
+    console.log('Player: MEDIA_NEXT');
+    return;
+  }
+
+  // CYCLE -> toggle MANUAL / AUTO
+  if (msg.controller === 46 && msg.value === 127) {
+    autoPlayMode = !autoPlayMode;
+
+    const value = autoPlayMode ? 3 : 0;
+    send('settings.playMode', value);
+
+    console.log(`Player mode: ${autoPlayMode ? 'AUTO' : 'MANUAL'}`);
+    return;
+  }
+
+  // =========================
+  // BANK 1 : voies 1 à 8
+  // =========================
+  if (bank === 1) {
+    // Faders 1 à 8 -> volumes voies 1 à 8
+    if (msg.controller >= 0 && msg.controller <= 7) {
+      const channel = msg.controller;
+      const value = msg.value / 127;
+
+      send(`i.${channel}.mix`, value);
+      return;
+    }
+
+    // Potards 1 à 8 -> gains voies 1 à 8
+    if (msg.controller >= 16 && msg.controller <= 23) {
+      const channel = msg.controller - 16;
+      const value = msg.value / 127;
+
+      send(`i.${channel}.gain`, value);
+      return;
+    }
+
+    // S 1 à 8 -> solo voies 1 à 8
+    if (msg.controller >= 32 && msg.controller <= 39 && msg.value === 127) {
+      const channel = msg.controller - 32;
+      const key = `i.${channel}.solo`;
+      const value = toggleState(soloStates, key);
+
+      send(`i.${channel}.solo`, value);
+      console.log(`Solo voie ${channel + 1}: ${value}`);
+      return;
+    }
+
+    // M 1 à 8 -> mute voies 1 à 8
+    if (msg.controller >= 48 && msg.controller <= 55 && msg.value === 127) {
+      const channel = msg.controller - 48;
+      const key = `i.${channel}.mute`;
+      const value = toggleState(muteStates, key);
+
+      send(`i.${channel}.mute`, value);
+      console.log(`Mute voie ${channel + 1}: ${value}`);
+      return;
+    }
+  }
+
+  // =========================
+  // BANK 2 : utilitaires
+  // =========================
+  if (bank === 2) {
+    // Faders
+    if (msg.controller >= 0 && msg.controller <= 7) {
+      const fader = msg.controller;
+      const value = msg.value / 127;
+
+      // Fader 1 -> Line L/R
+      if (fader === 0) {
+        sendStereo('l', 'mix', value);
+        return;
+      }
+
+      // Fader 2 -> Player L/R
+      if (fader === 1) {
+        sendStereo('p', 'mix', value);
+        return;
+      }
+
+      // Fader 6 -> Sub 1
+      if (fader === 5) {
+        send('s.0.mix', value);
+        return;
+      }
+
+      // Fader 7 -> Sub 2
+      if (fader === 6) {
+        send('s.1.mix', value);
+        return;
+      }
+
+      // Fader 8 -> Master
+      if (fader === 7) {
+        send('m.mix', value);
+        return;
+      }
+    }
+
+    // S1 -> solo Line L/R
+    if (msg.controller === 32 && msg.value === 127) {
+      const value = toggleState(soloStates, 'line.solo');
+
+      sendStereo('l', 'solo', value);
+      console.log(`Solo Line L/R: ${value}`);
+      return;
+    }
+
+    // M1 -> mute Line L/R
+    if (msg.controller === 48 && msg.value === 127) {
+      const value = toggleState(muteStates, 'line.mute');
+
+      sendStereo('l', 'mute', value);
+      console.log(`Mute Line L/R: ${value}`);
+      return;
+    }
+
+    // S2 -> solo Player L/R
+    if (msg.controller === 33 && msg.value === 127) {
+      const value = toggleState(soloStates, 'player.solo');
+
+      sendStereo('p', 'solo', value);
+      console.log(`Solo Player L/R: ${value}`);
+      return;
+    }
+
+    // M2 -> mute Player L/R
+    if (msg.controller === 49 && msg.value === 127) {
+      const value = toggleState(muteStates, 'player.mute');
+
+      sendStereo('p', 'mute', value);
+      console.log(`Mute Player L/R: ${value}`);
+      return;
+    }
+
+    // S6 -> solo Sub 1
+    if (msg.controller === 37 && msg.value === 127) {
+      const value = toggleState(soloStates, 'sub1.solo');
+
+      send('s.0.solo', value);
+      console.log(`Solo Sub 1: ${value}`);
+      return;
+    }
+
+    // M6 -> mute Sub 1
+    if (msg.controller === 53 && msg.value === 127) {
+      const value = toggleState(muteStates, 'sub1.mute');
+
+      send('s.0.mute', value);
+      console.log(`Mute Sub 1: ${value}`);
+      return;
+    }
+
+    // S7 -> solo Sub 2
+    if (msg.controller === 38 && msg.value === 127) {
+      const value = toggleState(soloStates, 'sub2.solo');
+
+      send('s.1.solo', value);
+      console.log(`Solo Sub 2: ${value}`);
+      return;
+    }
+
+    // M7 -> mute Sub 2
+    if (msg.controller === 54 && msg.value === 127) {
+      const value = toggleState(muteStates, 'sub2.mute');
+
+      send('s.1.mute', value);
+      console.log(`Mute Sub 2: ${value}`);
+      return;
+    }
+  }
+});
+
