@@ -23,34 +23,9 @@ setInterval(() => {
   }
 }, 5000);
 
-// =========================
-// DÉTECTION MIDI AUTOMATIQUE
-// =========================
-
-const midiInputs = easymidi.getInputs();
-
-console.log('Entrées MIDI détectées :');
-midiInputs.forEach((name, index) => {
-  console.log(`  [${index}] ${name}`);
-});
-
-const nanoInputName = midiInputs.find(name =>
-  name.toLowerCase().includes('nanokontrol2')
+const input = new easymidi.Input(
+  'nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 20:0'
 );
-
-if (!nanoInputName) {
-  console.error('');
-  console.error('Erreur : nanoKONTROL2 introuvable.');
-  console.error('Vérifie que le contrôleur est branché puis relance :');
-  console.error('');
-  console.error('  node nanoKONTROL2.js');
-  console.error('');
-  process.exit(1);
-}
-
-console.log(`MIDI utilisé : ${nanoInputName}`);
-
-const input = new easymidi.Input(nanoInputName);
 
 let bank = 1;
 let autoPlayMode = false;
@@ -310,4 +285,3 @@ input.on('cc', msg => {
     }
   }
 });
-
