@@ -75,9 +75,9 @@ The goal is to make it much more usable during:
 ## Install
 
 ```bash
-git clone https://github.com/your-repository/ui12-midi.git
+git clone <repository-url>
 
-cd ui12-midi
+cd nanoKONTROL2_to_soundcraft_UI/ui12-midi
 
 npm install
 ````
@@ -87,7 +87,7 @@ npm install
 ## Launch
 
 ```bash
-node nanoKONTROL2.js
+npm start
 ```
 
 ---
@@ -141,8 +141,9 @@ The runtime automatically knows:
 Example:
 
 ```ini
-f1 = chantre
-f2 = lecteur
+[bank:1]
+f1 = i1
+f2 = i2
 f8 = master
 ```
 
@@ -249,12 +250,13 @@ This allows:
 
 ```text
 project/
-├── nanoKONTROL2.js
-├── runtime/
-├── configs/
-├── contracts/
-├── examples/
-└── package.json
+├── docs/
+└── ui12-midi/
+    ├── nanoKONTROL2.js
+    ├── runtime/
+    ├── configs/
+    ├── tests/
+    └── package.json
 ```
 
 ---
@@ -270,7 +272,7 @@ The project separates:
 Available contracts:
 
 ```text
-contracts/
+docs/
 ├── aliases.contract.json
 ├── ui12.contract.json
 ├── transport.contract.json
@@ -293,20 +295,33 @@ They do NOT define live setups.
 Live mappings are stored in:
 
 ```text
-configs/
+ui12-midi/configs/
 ```
 
 Examples:
 
 ```text
-configs/
-├── messe.map
-├── rehearsal.map
-├── theatre.map
-└── concert.map
+ui12-midi/configs/
+└── legacy.map
 ```
 
 The runtime scans configurations automatically at startup.
+
+Minimal `.map` format:
+
+```ini
+[meta]
+name = my-live-setup
+
+[bank:1]
+f1 = i1
+f2 = line
+f8 = master
+
+[bank:2]
+f1 = player
+f6 = sub1
+```
 
 ---
 
@@ -352,8 +367,9 @@ Possible future extensions:
 
 Current state:
 
-* validated live prototype
-* active refactor toward generic runtime engine
+* contract-driven runtime engine
+* `.map`-driven live profiles
+* terminal-only operation
 
 ---
 
