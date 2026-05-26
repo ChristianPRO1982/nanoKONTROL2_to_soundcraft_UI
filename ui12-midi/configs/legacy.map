@@ -1,0 +1,19 @@
+[meta]
+name = legacy
+
+[bank:1]
+f1 = i1
+f2 = i2
+f3 = i3
+f4 = i4
+f5 = i5
+f6 = i6
+f7 = i7
+f8 = i8
+
+[bank:2]
+f1 = line
+f2 = player
+f6 = sub1
+f7 = sub2
+f8 = master

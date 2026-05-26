@@ -1,0 +1,130 @@
+{
+  "contract": "controller-nanokontrol2.contract",
+  "version": "1.0.0",
+  "description": "Korg nanoKONTROL2 MIDI controller contract for Soundcraft UI12 runtime",
+
+  "device": {
+    "manufacturer": "Korg",
+    "model": "nanoKONTROL2",
+    "defaultMidiInput": "nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 20:0",
+    "midiType": "cc"
+  },
+
+  "layout": {
+    "banks": 8,
+    "strips": 8
+  },
+
+  "controllers": {
+    "faders": {
+      "type": "continuous",
+      "range": [0, 127],
+
+      "mapping": {
+        "1": 0,
+        "2": 1,
+        "3": 2,
+        "4": 3,
+        "5": 4,
+        "6": 5,
+        "7": 6,
+        "8": 7
+      }
+    },
+
+    "knobs": {
+      "type": "continuous",
+      "range": [0, 127],
+
+      "mapping": {
+        "1": 16,
+        "2": 17,
+        "3": 18,
+        "4": 19,
+        "5": 20,
+        "6": 21,
+        "7": 22,
+        "8": 23
+      }
+    },
+
+    "soloButtons": {
+      "type": "toggle",
+      "pressedValue": 127,
+      "releasedValue": 0,
+
+      "mapping": {
+        "1": 32,
+        "2": 33,
+        "3": 34,
+        "4": 35,
+        "5": 36,
+        "6": 37,
+        "7": 38,
+        "8": 39
+      }
+    },
+
+    "muteButtons": {
+      "type": "toggle",
+      "pressedValue": 127,
+      "releasedValue": 0,
+
+      "mapping": {
+        "1": 48,
+        "2": 49,
+        "3": 50,
+        "4": 51,
+        "5": 52,
+        "6": 53,
+        "7": 54,
+        "8": 55
+      }
+    },
+
+    "recordButtons": {
+      "type": "toggle",
+      "pressedValue": 127,
+      "releasedValue": 0,
+
+      "mapping": {
+        "1": 64,
+        "2": 65,
+        "3": 66,
+        "4": 67,
+        "5": 68,
+        "6": 69,
+        "7": 70,
+        "8": 71
+      }
+    },
+
+    "transport": {
+      "play": 41,
+      "stop": 42,
+      "previousTrack": 58,
+      "nextTrack": 59,
+      "cycle": 46
+    },
+
+    "bankNavigation": {
+      "markerLeft": 61,
+      "markerRight": 62
+    }
+  },
+
+  "runtimeMeaning": {
+    "fader": "mix",
+    "knob": "gain",
+    "soloButton": "solo",
+    "muteButton": "mute",
+    "recordButton": "reserved"
+  },
+
+  "notes": [
+    "The runtime automatically infers mix/gain/mute/solo from physical controls.",
+    "The configuration files only map logical targets.",
+    "Record buttons are intentionally reserved for future features.",
+    "Transport buttons remain global and bank-independent."
+  ]
+}

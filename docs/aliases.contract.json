@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract": "aliases.contract",
+  "version": "1.0.0",
+  "description": "Logical aliases for Soundcraft UI12 runtime mapping",
+
+  "aliases": {
+    "i1": {
+      "type": "input",
+      "channels": ["i.0"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i2": {
+      "type": "input",
+      "channels": ["i.1"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i3": {
+      "type": "input",
+      "channels": ["i.2"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i4": {
+      "type": "input",
+      "channels": ["i.3"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i5": {
+      "type": "input",
+      "channels": ["i.4"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i6": {
+      "type": "input",
+      "channels": ["i.5"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i7": {
+      "type": "input",
+      "channels": ["i.6"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "i8": {
+      "type": "input",
+      "channels": ["i.7"],
+      "capabilities": ["mix", "gain", "mute", "solo"]
+    },
+
+    "line": {
+      "type": "stereo",
+      "channels": ["l.0", "l.1"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "player": {
+      "type": "stereo",
+      "channels": ["p.0", "p.1"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "sub1": {
+      "type": "subgroup",
+      "channels": ["s.0"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "sub2": {
+      "type": "subgroup",
+      "channels": ["s.1"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "sub3": {
+      "type": "subgroup",
+      "channels": ["s.2"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "sub4": {
+      "type": "subgroup",
+      "channels": ["s.3"],
+      "capabilities": ["mix", "mute", "solo"]
+    },
+
+    "master": {
+      "type": "master",
+      "channels": ["m"],
+      "capabilities": ["mix"]
+    },
+
+    "fx1": {
+      "type": "fx",
+      "channels": ["f.0"],
+      "capabilities": ["mix", "mute"]
+    },
+
+    "fx2": {
+      "type": "fx",
+      "channels": ["f.1"],
+      "capabilities": ["mix", "mute"]
+    },
+
+    "fx3": {
+      "type": "fx",
+      "channels": ["f.2"],
+      "capabilities": ["mix", "mute"]
+    },
+
+    "fx4": {
+      "type": "fx",
+      "channels": ["f.3"],
+      "capabilities": ["mix", "mute"]
+    }
+  }
+}
