@@ -1,0 +1,71 @@
+{
+  "contract": "ui12.contract",
+  "version": "1.0.0",
+  "description": "Soundcraft UI12 technical contract for logical mapping runtime",
+
+  "connection": {
+    "defaultHost": "10.10.1.1",
+    "websocketPath": "/socket.io/?EIO=3&transport=websocket",
+    "keepAliveMessage": "2::",
+    "keepAliveIntervalMs": 5000,
+    "setPrefix": "3:::SETD^",
+    "rawPrefix": "3:::"
+  },
+
+  "defaultMidiInput": "nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 20:0",
+
+  "supportedCapabilities": [
+    "mix",
+    "gain",
+    "mute",
+    "solo"
+  ],
+
+  "capabilitySuffix": {
+    "mix": "mix",
+    "gain": "gain",
+    "mute": "mute",
+    "solo": "solo"
+  },
+
+  "valueTypes": {
+    "mix": "continuous",
+    "gain": "continuous",
+    "mute": "toggle",
+    "solo": "toggle"
+  },
+
+  "continuousRange": {
+    "min": 0,
+    "max": 1
+  },
+
+  "toggleValues": {
+    "off": 0,
+    "on": 1
+  },
+
+  "globalSettings": {
+    "playMode": {
+      "path": "settings.playMode",
+      "values": {
+        "manual": 0,
+        "auto": 3
+      }
+    }
+  },
+
+  "rawCommands": {
+    "mediaPlay": "MEDIA_PLAY",
+    "mediaStop": "MEDIA_STOP",
+    "mediaPrev": "MEDIA_PREV",
+    "mediaNext": "MEDIA_NEXT",
+    "mediaPause": "MEDIA_PAUSE"
+  },
+
+  "notes": [
+    "Aliases are defined in aliases.contract.json.",
+    "Mapping file formats are defined separately.",
+    "This contract describes runtime behavior, protocol prefixes, value conventions, and global UI12 commands."
+  ]
+}

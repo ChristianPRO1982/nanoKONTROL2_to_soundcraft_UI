@@ -1,0 +1,72 @@
+{
+  "contract": "transport.contract",
+  "version": "1.0.0",
+  "description": "Transport and player control contract for Soundcraft UI12 runtime",
+
+  "transportControls": {
+    "play": {
+      "type": "raw",
+      "command": "MEDIA_PLAY",
+      "description": "Start player playback"
+    },
+
+    "stop": {
+      "type": "raw",
+      "command": "MEDIA_STOP",
+      "description": "Stop player playback"
+    },
+
+    "pause": {
+      "type": "raw",
+      "command": "MEDIA_PAUSE",
+      "description": "Pause player playback"
+    },
+
+    "previousTrack": {
+      "type": "raw",
+      "command": "MEDIA_PREV",
+      "description": "Load previous track"
+    },
+
+    "nextTrack": {
+      "type": "raw",
+      "command": "MEDIA_NEXT",
+      "description": "Load next track"
+    }
+  },
+
+  "playModes": {
+    "path": "settings.playMode",
+
+    "manual": {
+      "value": 0,
+      "description": "Manual playback mode"
+    },
+
+    "auto": {
+      "value": 3,
+      "description": "Automatic playback mode"
+    }
+  },
+
+  "runtimeBehavior": {
+    "togglePlayMode": true,
+    "transportControlsAreGlobal": true,
+    "transportIgnoresCurrentBank": true
+  },
+
+  "defaultMidiControllers": {
+    "play": 41,
+    "stop": 42,
+    "previousTrack": 58,
+    "nextTrack": 59,
+    "cycle": 46
+  },
+
+  "notes": [
+    "Transport controls must remain active independently from banks.",
+    "MEDIA_* commands are sent as raw websocket commands.",
+    "Play mode uses SETD with settings.playMode.",
+    "The runtime maintains the current autoplay state locally."
+  ]
+}
