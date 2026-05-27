@@ -1,5 +1,5 @@
 [meta]
-name = legacy
+name = validated-prototype
 
 [bank:1]
 f1 = i1

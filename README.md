@@ -80,7 +80,7 @@ git clone <repository-url>
 cd nanoKONTROL2_to_soundcraft_UI/ui12-midi
 
 npm install
-````
+```
 
 ---
 
@@ -88,6 +88,16 @@ npm install
 
 ```bash
 npm start
+```
+
+---
+
+## Tests
+
+```bash
+cd ui12-midi
+npm install
+npm test
 ```
 
 ---
@@ -246,17 +256,23 @@ This allows:
 
 ---
 
-# 📁 Project structure
+# 📁 Repository layout
 
 ```text
 project/
-├── docs/
-└── ui12-midi/
-    ├── nanoKONTROL2.js
-    ├── runtime/
-    ├── configs/
-    ├── tests/
-    └── package.json
+├── docs/       # contracts and development documentation
+│   ├── aliases.contract.json
+│   ├── controller-nanokontrol2.contract.json
+│   ├── transport.contract.json
+│   └── ui12.contract.json
+├── ui12-midi/  # production Node.js runtime (nanoKONTROL2 ↔ UI12)
+│   ├── configs/
+│   │   └── validated-prototype.map
+│   ├── runtime/
+│   ├── tests/
+│   ├── nanoKONTROL2.js
+│   └── package.json
+└── ui12-web/   # reverse-engineering workspace (not production runtime)
 ```
 
 ---
@@ -302,7 +318,7 @@ Examples:
 
 ```text
 ui12-midi/configs/
-└── legacy.map
+└── validated-prototype.map
 ```
 
 The runtime scans configurations automatically at startup.
