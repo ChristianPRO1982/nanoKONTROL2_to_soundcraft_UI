@@ -80,3 +80,24 @@ test('wsClient suppresses verbose logs in run mode while still emitting events',
   ]);
   assert.equal(logs.length, 0);
 });
+
+test('wsClient exposes message and connection event handlers', () => {
+  const { client } = makeClient();
+  const messages = [];
+  const connections = [];
+
+  client.setMessageEventHandler(message => {
+    messages.push(message);
+  });
+  client.setConnectionEventHandler(event => {
+    connections.push(event.type);
+  });
+
+  client._emitMessageEvent('SETD^i.0.mute^1');
+  client._emitConnectionEvent({ type: 'open' });
+  client._emitConnectionEvent({ type: 'reopen' });
+  client._emitConnectionEvent({ type: 'close' });
+
+  assert.deepEqual(messages, ['SETD^i.0.mute^1']);
+  assert.deepEqual(connections, ['open', 'reopen', 'close']);
+});

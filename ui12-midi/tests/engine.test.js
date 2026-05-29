@@ -2,15 +2,24 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { RuntimeEngine, scaleContinuousMidi } = require('../runtime/engine');
+const { StateStore } = require('../runtime/stateStore');
 
 function makeContracts() {
   return {
     controller: {
+      device: {
+        ledRecoveryMs: 5000,
+        rBlinkIntervalMs: 400,
+        faderDirtyThreshold: 0.06,
+        faderCleanThreshold: 0.04,
+        rBlinkStartOn: true,
+      },
       controllers: {
         faders: { mapping: { 1: 0 } },
         knobs: { mapping: { 1: 16 } },
         soloButtons: { mapping: { 1: 32 }, pressedValue: 127 },
         muteButtons: { mapping: { 1: 48 }, pressedValue: 127 },
+        recordButtons: { mapping: { 1: 64 }, pressedValue: 127 },
         transport: { play: 41, stop: 42, previousTrack: 58, nextTrack: 59, cycle: 46 },
         bankNavigation: { markerLeft: 61, markerRight: 62 },
       },
@@ -60,9 +69,19 @@ function makeEngine(profile = makeProfile(), options = {}) {
   const sentSet = [];
   const sentRaw = [];
   const logs = [];
+  const wsHandlers = {
+    message: null,
+    connection: null,
+  };
 
   const wsClient = {
     start() {},
+    setMessageEventHandler(handler) {
+      wsHandlers.message = handler;
+    },
+    setConnectionEventHandler(handler) {
+      wsHandlers.connection = handler;
+    },
     sendSet(path, value) {
       sentSet.push({ path, value });
     },
@@ -86,15 +105,18 @@ function makeEngine(profile = makeProfile(), options = {}) {
   const midiInput = { on() {} };
 
   const engine = new RuntimeEngine({
-    contracts: makeContracts(),
+    contracts: options.contracts || makeContracts(),
     resolvedProfile: profile,
     midiInput,
     wsClient,
     logger,
     uiMode: options.uiMode || 'debug',
+    ledRenderer: options.ledRenderer,
+    stateStore: options.stateStore,
+    ui12Parser: options.ui12Parser,
   });
 
-  return { engine, sentSet, sentRaw, logs };
+  return { engine, sentSet, sentRaw, logs, wsHandlers };
 }
 
 function getLastRunScreen(logs) {
@@ -306,4 +328,118 @@ test('engine run mode keeps ascii state per bank', () => {
   screen = getLastRunScreen(logs);
   assert.equal(screen[2], 'BANK 1');
   assert.equal(screen[15].includes(' 10 '), true);
+});
+
+test('engine updates LED render only after UI12 mute/solo feedback', () => {
+  const renderSnapshots = [];
+  const stateStore = new StateStore();
+  const ledRenderer = {
+    renderBank({ bank, stateStore: store }) {
+      renderSnapshots.push({
+        bankIndex: bank.bankIndex,
+        mute: store.get('i.0.mute', 0),
+        solo: store.get('i.0.solo', 0),
+      });
+    },
+  };
+
+  const { engine } = makeEngine(makeProfile(), { ledRenderer, stateStore });
+  engine.start();
+  assert.equal(renderSnapshots.length, 1);
+  assert.deepEqual(renderSnapshots[0], { bankIndex: 1, mute: 0, solo: 0 });
+
+  engine.handleCc({ controller: 48, value: 127 });
+  assert.equal(renderSnapshots.length, 1);
+
+  engine.onWsMessageEvent('3:::SETD^i.0.mute^1');
+  assert.equal(renderSnapshots.length, 2);
+  assert.deepEqual(renderSnapshots[1], { bankIndex: 1, mute: 1, solo: 0 });
+});
+
+test('engine rerenders LEDs on bank change and websocket reconnect events', () => {
+  const renderBankIndexes = [];
+  const ledRenderer = {
+    renderBank({ bank }) {
+      renderBankIndexes.push(bank.bankIndex);
+    },
+  };
+
+  const { engine } = makeEngine(makeProfile(), {
+    ledRenderer,
+    stateStore: new StateStore(),
+  });
+
+  engine.start();
+  assert.deepEqual(renderBankIndexes, [1]);
+
+  engine.handleCc({ controller: 62, value: 127 });
+  assert.deepEqual(renderBankIndexes, [1, 2]);
+
+  engine.onWsConnectionEvent({ type: 'reopen' });
+  assert.deepEqual(renderBankIndexes, [1, 2, 2]);
+});
+
+test('engine start wires websocket handlers and starts LED recovery timer when renderer exists', () => {
+  const { engine, wsHandlers } = makeEngine(makeProfile(), {
+    ledRenderer: { renderFullBank() {}, renderRBankBlink() {} },
+    stateStore: new StateStore(),
+  });
+
+  engine.start();
+
+  assert.equal(typeof wsHandlers.message, 'function');
+  assert.equal(typeof wsHandlers.connection, 'function');
+  assert.equal(engine.ledRecoveryTimer !== null, true);
+  assert.equal(engine.rBlinkTimer !== null, true);
+});
+
+test('engine stores UI12 mix feedback and renders R blink without full render when only mix changes', () => {
+  const fullRenders = [];
+  const blinkRenders = [];
+  const stateStore = new StateStore();
+  const ledRenderer = {
+    renderFullBank(args) {
+      fullRenders.push(args);
+    },
+    renderRBankBlink(args) {
+      blinkRenders.push(args);
+    },
+  };
+
+  const { engine } = makeEngine(makeProfile(), { ledRenderer, stateStore });
+  engine.start();
+
+  assert.equal(fullRenders.length, 1);
+  assert.equal(blinkRenders.length, 0);
+
+  engine.onWsMessageEvent('3:::SETD^i.0.mix^0.42');
+
+  assert.equal(stateStore.get('i.0.mix'), 0.42);
+  assert.equal(fullRenders.length, 1);
+  assert.equal(blinkRenders.length, 1);
+});
+
+test('engine fader movement can start/stop visible dirty blink through hysteresis', () => {
+  const blinkRenders = [];
+  const stateStore = new StateStore();
+  const ledRenderer = {
+    renderFullBank() {},
+    renderRBankBlink(args) {
+      blinkRenders.push({
+        phase: args.rBlinkPhaseOn,
+        strip1Dirty: args.visibleDirtyByStrip.get(1),
+      });
+    },
+  };
+
+  const { engine } = makeEngine(makeProfile(), { ledRenderer, stateStore });
+  engine.start();
+
+  stateStore.set('i.0.mix', 0.1);
+  engine.handleCc({ controller: 0, value: 127 });
+  assert.equal(blinkRenders[blinkRenders.length - 1].strip1Dirty, true);
+
+  stateStore.set('i.0.mix', 0.98);
+  engine.handleCc({ controller: 0, value: 127 });
+  assert.equal(blinkRenders[blinkRenders.length - 1].strip1Dirty, false);
 });

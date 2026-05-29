@@ -8,15 +8,26 @@ class Ui12WsClient {
     this.logger = options.logger || console;
     this.uiMode = normalizeUiMode(options.uiMode);
     this.onSendEvent = options.onSendEvent || null;
+    this.onMessageEvent = options.onMessageEvent || null;
+    this.onConnectionEvent = options.onConnectionEvent || null;
     this.reconnectDelayMs = options.reconnectDelayMs || 2000;
 
     this._ws = null;
     this._closing = false;
     this._keepAliveTimer = null;
+    this._hasConnectedOnce = false;
   }
 
   setSendEventHandler(handler) {
     this.onSendEvent = typeof handler === 'function' ? handler : null;
+  }
+
+  setMessageEventHandler(handler) {
+    this.onMessageEvent = typeof handler === 'function' ? handler : null;
+  }
+
+  setConnectionEventHandler(handler) {
+    this.onConnectionEvent = typeof handler === 'function' ? handler : null;
   }
 
   shouldLogVerbose() {
@@ -29,12 +40,25 @@ class Ui12WsClient {
     }
   }
 
+  _emitMessageEvent(message) {
+    if (typeof this.onMessageEvent === 'function') {
+      this.onMessageEvent(message);
+    }
+  }
+
+  _emitConnectionEvent(event) {
+    if (typeof this.onConnectionEvent === 'function') {
+      this.onConnectionEvent(event);
+    }
+  }
+
   get isOpen() {
     return this._ws && this._ws.readyState === WebSocket.OPEN;
   }
 
   start() {
     this._closing = false;
+    this._hasConnectedOnce = false;
     this._connect();
   }
 
@@ -59,6 +83,9 @@ class Ui12WsClient {
       if (this.shouldLogVerbose()) {
         this.logger.log(`UI12 websocket connecté (${this.host})`);
       }
+      const eventType = this._hasConnectedOnce ? 'reopen' : 'open';
+      this._emitConnectionEvent({ type: eventType });
+      this._hasConnectedOnce = true;
       this._startKeepAlive();
     });
 
@@ -67,6 +94,7 @@ class Ui12WsClient {
       if (this.shouldLogVerbose()) {
         this.logger.log(`UI12 websocket déconnecté code=${code} reason=${reason}`);
       }
+      this._emitConnectionEvent({ type: 'close', code, reason });
       if (this._keepAliveTimer) {
         clearInterval(this._keepAliveTimer);
         this._keepAliveTimer = null;
@@ -81,6 +109,11 @@ class Ui12WsClient {
       if (this.shouldLogVerbose()) {
         this.logger.error(`UI12 websocket erreur: ${error.message}`);
       }
+    });
+
+    this._ws.on('message', payload => {
+      const message = typeof payload === 'string' ? payload : payload.toString();
+      this._emitMessageEvent(message);
     });
   }
 

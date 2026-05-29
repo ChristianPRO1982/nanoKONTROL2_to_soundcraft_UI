@@ -7,6 +7,14 @@
     "manufacturer": "Korg",
     "model": "nanoKONTROL2",
     "defaultMidiInput": "nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 20:0",
+    "defaultMidiOutput": "nanoKONTROL2:nanoKONTROL2 nanoKONTROL2 _ CTR 24:0",
+    "ledOutChannel": 15,
+    "ledRecoveryMs": 5000,
+    "rBlinkIntervalMs": 400,
+    "faderDirtyThreshold": 0.06,
+    "faderCleanThreshold": 0.04,
+    "rBlinkStartOn": true,
+    "ledPreflightSysex": [240, 66, 64, 0, 1, 19, 0, 0, 0, 1, 247],
     "midiType": "cc"
   },
 

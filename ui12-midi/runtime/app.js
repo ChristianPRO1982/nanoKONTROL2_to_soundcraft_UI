@@ -13,6 +13,7 @@ const { Ui12WsClient } = require('./wsClient');
 const { RuntimeEngine } = require('./engine');
 const { readUiModeFromEnv } = require('./uiMode');
 const { loadEnvFile } = require('./env');
+const { MidiOutput, PREFERRED_NANOKONTROL2_OUTPUT, resolveMidiOutputName } = require('./midiOutput');
 
 function resolveMidiInputName(midiInputs, defaultName) {
   if (defaultName && midiInputs.includes(defaultName)) {
@@ -69,6 +70,28 @@ async function bootstrap(options = {}) {
   logger.log(`MIDI utilisé : ${midiInputName}`);
   const midiInput = new easymidi.Input(midiInputName);
 
+  const midiOutputs = easymidi.getOutputs();
+  logger.log('Sorties MIDI détectées :');
+  midiOutputs.forEach((name, index) => logger.log(`  [${index}] ${name}`));
+
+  const controllerDevice = contracts.controller.device || {};
+  const midiOutputName = resolveMidiOutputName(
+    midiOutputs,
+    controllerDevice.defaultMidiOutput || PREFERRED_NANOKONTROL2_OUTPUT
+  );
+
+  if (!midiOutputName) {
+    throw new Error('Sortie MIDI nanoKONTROL2 introuvable. Vérifie le port OUT puis relance.');
+  }
+
+  logger.log(`MIDI OUT utilisé : ${midiOutputName}`);
+  const midiOutput = new MidiOutput({
+    output: new easymidi.Output(midiOutputName),
+    logger,
+    ledOutChannel: controllerDevice.ledOutChannel,
+    preflightSysex: controllerDevice.ledPreflightSysex,
+  });
+
   const ui12Host = process.env.UI12_HOST || contracts.ui12.connection.defaultHost;
   const wsClient = new Ui12WsClient({
     host: ui12Host,
@@ -81,6 +104,7 @@ async function bootstrap(options = {}) {
     contracts,
     resolvedProfile,
     midiInput,
+    midiOutput,
     wsClient,
     logger,
     uiMode,
@@ -93,6 +117,7 @@ async function bootstrap(options = {}) {
     engine,
     wsClient,
     midiInput,
+    midiOutput,
     resolvedProfile,
   };
 }
@@ -100,4 +125,5 @@ async function bootstrap(options = {}) {
 module.exports = {
   bootstrap,
   resolveMidiInputName,
+  resolveMidiOutputName,
 };

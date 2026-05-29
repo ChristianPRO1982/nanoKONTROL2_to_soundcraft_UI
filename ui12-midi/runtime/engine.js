@@ -1,6 +1,10 @@
 const { buildControllerLayout } = require('./controller');
 const { getCapabilityForControl } = require('./mapping');
 const { normalizeUiMode } = require('./uiMode');
+const { LedRenderer } = require('./ledRenderer');
+const { StateStore } = require('./stateStore');
+const { parseUi12Message } = require('./ui12Parser');
+const { FaderSync } = require('./faderSync');
 
 function scaleContinuousMidi(value, range) {
   const ratio = Number(value) / 127;
@@ -14,10 +18,23 @@ function toDisplayInt(value) {
 }
 
 class RuntimeEngine {
-  constructor({ contracts, resolvedProfile, midiInput, wsClient, logger = console, uiMode = 'debug' }) {
+  constructor({
+    contracts,
+    resolvedProfile,
+    midiInput,
+    midiOutput,
+    wsClient,
+    logger = console,
+    uiMode = 'debug',
+    ledRenderer,
+    stateStore,
+    ui12Parser,
+    faderSync,
+  }) {
     this.contracts = contracts;
     this.profile = resolvedProfile;
     this.midiInput = midiInput;
+    this.midiOutput = midiOutput;
     this.wsClient = wsClient;
     this.logger = logger;
 
@@ -32,11 +49,48 @@ class RuntimeEngine {
     this.warnedUnsupported = new Set();
     this.lastRunAction = 'INIT:READY';
     this.runDisplayStateByBank = new Map();
+
+    this.stateStore = stateStore || new StateStore();
+    this.ui12Parser = ui12Parser || { parseUi12Message };
+    this.ledRenderer =
+      ledRenderer ||
+      (this.midiOutput
+        ? new LedRenderer({
+            midiOutput: this.midiOutput,
+            controllerContract: contracts.controller,
+          })
+        : null);
+
+    const controllerDevice = contracts.controller.device || {};
+    const ledRecoveryMs = Number(controllerDevice.ledRecoveryMs);
+    this.ledRecoveryMs = Number.isFinite(ledRecoveryMs) && ledRecoveryMs > 0 ? ledRecoveryMs : 5000;
+    const rBlinkIntervalMs = Number(controllerDevice.rBlinkIntervalMs);
+    this.rBlinkIntervalMs = Number.isFinite(rBlinkIntervalMs) && rBlinkIntervalMs > 0 ? rBlinkIntervalMs : 400;
+    const faderDirtyThreshold = Number(controllerDevice.faderDirtyThreshold);
+    const faderCleanThreshold = Number(controllerDevice.faderCleanThreshold);
+    this.faderSync =
+      faderSync ||
+      new FaderSync({
+        dirtyThreshold: Number.isFinite(faderDirtyThreshold) ? faderDirtyThreshold : 0.06,
+        cleanThreshold: Number.isFinite(faderCleanThreshold) ? faderCleanThreshold : 0.04,
+      });
+    this.rBlinkPhaseOn = controllerDevice.rBlinkStartOn !== false;
+    this.visibleDirtyByStrip = this.buildCleanVisibleDirtyByStrip();
+
+    this.ledRecoveryTimer = null;
+    this.rBlinkTimer = null;
   }
 
   start() {
     this.logProfileHeader();
     this.logger.log(`Banques actives: ${this.profile.banks.map(bank => bank.bankIndex).join(', ')}`);
+
+    if (typeof this.wsClient.setMessageEventHandler === 'function') {
+      this.wsClient.setMessageEventHandler(message => this.onWsMessageEvent(message));
+    }
+    if (typeof this.wsClient.setConnectionEventHandler === 'function') {
+      this.wsClient.setConnectionEventHandler(event => this.onWsConnectionEvent(event));
+    }
 
     this.wsClient.start();
 
@@ -45,6 +99,9 @@ class RuntimeEngine {
     });
 
     this.logBank();
+    this.renderLedsForActiveBank();
+    this.startLedRecoveryLoop();
+    this.startRBlinkLoop();
   }
 
   logProfileHeader() {
@@ -225,6 +282,35 @@ class RuntimeEngine {
     }
   }
 
+  buildCleanVisibleDirtyByStrip() {
+    const result = new Map();
+    for (let strip = 1; strip <= 8; strip += 1) {
+      result.set(strip, false);
+    }
+    return result;
+  }
+
+  recomputeVisibleDirtyState() {
+    if (!this.faderSync) {
+      this.visibleDirtyByStrip = this.buildCleanVisibleDirtyByStrip();
+      return;
+    }
+
+    this.visibleDirtyByStrip = this.faderSync.recomputeVisibleDirtyByStrip({
+      bank: this.currentBank(),
+      stateStore: this.stateStore,
+    });
+  }
+
+  hasVisibleDirtyStrips() {
+    for (const isDirty of this.visibleDirtyByStrip.values()) {
+      if (isDirty) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   onWsSendEvent(event) {
     if (this.uiMode !== 'run' || !event) {
       return;
@@ -242,10 +328,146 @@ class RuntimeEngine {
     }
   }
 
+  onWsMessageEvent(message) {
+    if (!this.ui12Parser || typeof this.ui12Parser.parseUi12Message !== 'function') {
+      return;
+    }
+
+    const events = this.ui12Parser.parseUi12Message(message);
+    if (!Array.isArray(events) || events.length === 0) {
+      return;
+    }
+
+    let hasMixUpdate = false;
+    let hasToggleUpdate = false;
+    events.forEach(event => {
+      if (!event || event.type !== 'set') {
+        return;
+      }
+
+      if (
+        !event.path ||
+        (!event.path.endsWith('.mix') && !event.path.endsWith('.mute') && !event.path.endsWith('.solo'))
+      ) {
+        return;
+      }
+
+      this.stateStore.set(event.path, event.value);
+
+      if (event.path.endsWith('.mix')) {
+        hasMixUpdate = true;
+      }
+      if (event.path.endsWith('.mute') || event.path.endsWith('.solo')) {
+        hasToggleUpdate = true;
+      }
+    });
+
+    if (hasMixUpdate) {
+      this.recomputeVisibleDirtyState();
+    }
+
+    if (hasToggleUpdate) {
+      this.renderLedsForActiveBank();
+      return;
+    }
+
+    if (hasMixUpdate) {
+      this.renderRBlinkLedsForActiveBank();
+    }
+  }
+
+  onWsConnectionEvent(event) {
+    if (!event) {
+      return;
+    }
+
+    if (event.type === 'open' || event.type === 'reopen') {
+      this.renderLedsForActiveBank();
+    }
+  }
+
+  startLedRecoveryLoop() {
+    if (!this.ledRenderer) {
+      return;
+    }
+
+    if (this.ledRecoveryTimer) {
+      clearInterval(this.ledRecoveryTimer);
+    }
+
+    this.ledRecoveryTimer = setInterval(() => {
+      this.renderLedsForActiveBank();
+    }, this.ledRecoveryMs);
+
+    if (typeof this.ledRecoveryTimer.unref === 'function') {
+      this.ledRecoveryTimer.unref();
+    }
+  }
+
+  startRBlinkLoop() {
+    if (!this.ledRenderer) {
+      return;
+    }
+
+    if (this.rBlinkTimer) {
+      clearInterval(this.rBlinkTimer);
+    }
+
+    this.rBlinkTimer = setInterval(() => {
+      this.rBlinkPhaseOn = !this.rBlinkPhaseOn;
+      if (this.hasVisibleDirtyStrips()) {
+        this.renderRBlinkLedsForActiveBank();
+      }
+    }, this.rBlinkIntervalMs);
+
+    if (typeof this.rBlinkTimer.unref === 'function') {
+      this.rBlinkTimer.unref();
+    }
+  }
+
+  renderLedsForActiveBank() {
+    if (!this.ledRenderer) {
+      return;
+    }
+
+    this.recomputeVisibleDirtyState();
+
+    if (typeof this.ledRenderer.renderFullBank === 'function') {
+      this.ledRenderer.renderFullBank({
+        bank: this.currentBank(),
+        stateStore: this.stateStore,
+        visibleDirtyByStrip: this.visibleDirtyByStrip,
+        rBlinkPhaseOn: this.rBlinkPhaseOn,
+      });
+      return;
+    }
+
+    this.ledRenderer.renderBank({
+      bank: this.currentBank(),
+      stateStore: this.stateStore,
+    });
+  }
+
+  renderRBlinkLedsForActiveBank() {
+    if (!this.ledRenderer) {
+      return;
+    }
+
+    if (typeof this.ledRenderer.renderRBankBlink === 'function') {
+      this.ledRenderer.renderRBankBlink({
+        bank: this.currentBank(),
+        visibleDirtyByStrip: this.visibleDirtyByStrip,
+        rBlinkPhaseOn: this.rBlinkPhaseOn,
+      });
+    }
+  }
+
   handleBankNavigation(msg) {
     if (msg.value !== this.layout.togglePressedValue) {
       return false;
     }
+
+    const previousBankPosition = this.bankPosition;
 
     if (msg.controller === this.layout.bankNavigation.leftCc) {
       this.bankPosition = Math.max(0, this.bankPosition - 1);
@@ -253,6 +475,9 @@ class RuntimeEngine {
         this.publishAction(`BANK:${this.currentBank().bankIndex}`);
       } else {
         this.logBank();
+      }
+      if (this.bankPosition !== previousBankPosition) {
+        this.renderLedsForActiveBank();
       }
       return true;
     }
@@ -263,6 +488,9 @@ class RuntimeEngine {
         this.publishAction(`BANK:${this.currentBank().bankIndex}`);
       } else {
         this.logBank();
+      }
+      if (this.bankPosition !== previousBankPosition) {
+        this.renderLedsForActiveBank();
       }
       return true;
     }
@@ -324,6 +552,12 @@ class RuntimeEngine {
 
     if (!controlType) {
       return;
+    }
+
+    if (controlType === 'fader' && this.faderSync) {
+      this.faderSync.setPhysicalFaderValue(strip, msg.value);
+      this.recomputeVisibleDirtyState();
+      this.renderRBlinkLedsForActiveBank();
     }
 
     const assignment = this.currentBank().strips.get(strip);
