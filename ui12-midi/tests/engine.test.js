@@ -287,10 +287,10 @@ test('engine run mode renders faders ascii with separator just after gain line',
   assert.equal(screen[11].includes('  S '), true);
   assert.equal(screen[12].includes('  M '), true);
   assert.equal(screen[13], rowSeparator);
-  assert.equal(screen[14], '|    |    |    |    |    |    |    |    |');
-  assert.equal(screen[15].includes(' 10 '), true);
-  assert.equal(screen[16], '|    |    |    |    |    |    |    |    |');
-  assert.equal(screen[17], rowSeparator);
+  assert.equal(screen[14].includes(' 10 '), true);
+  assert.equal(screen[15], '|    |    |    |    |    |    |    |    |');
+  assert.equal(screen[24], '|    |    |    |    |    |    |    |    |');
+  assert.equal(screen[25], rowSeparator);
 });
 
 test('engine run mode keeps ascii state per bank', () => {
@@ -307,12 +307,12 @@ test('engine run mode keeps ascii state per bank', () => {
   });
   let screen = getLastRunScreen(logs);
   assert.equal(screen[2], 'BANK 1');
-  assert.equal(screen[15].includes(' 10 '), true);
+  assert.equal(screen[14].includes(' 10 '), true);
 
   engine.handleCc({ controller: 62, value: 127 });
   screen = getLastRunScreen(logs);
   assert.equal(screen[2], 'BANK 2');
-  assert.equal(screen[9], '|    |    |    |    |    |    |    |    |');
+  assert.equal(screen[14], '|    |    |    |    |    |    |    |    |');
 
   engine.handleCc({ controller: 0, value: 64 });
   engine.onWsSendEvent({
@@ -322,12 +322,12 @@ test('engine run mode keeps ascii state per bank', () => {
     value: sentSet[sentSet.length - 1].value,
   });
   screen = getLastRunScreen(logs);
-  assert.equal(screen[15].includes('  5 '), true);
+  assert.equal(screen[19].includes('  5 '), true);
 
   engine.handleCc({ controller: 61, value: 127 });
   screen = getLastRunScreen(logs);
   assert.equal(screen[2], 'BANK 1');
-  assert.equal(screen[15].includes(' 10 '), true);
+  assert.equal(screen[14].includes(' 10 '), true);
 });
 
 test('engine updates LED render only after UI12 mute/solo feedback', () => {

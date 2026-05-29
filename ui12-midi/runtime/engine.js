@@ -159,9 +159,6 @@ class RuntimeEngine {
     const gainRow = [];
     const soloRow = [];
     const muteRow = [];
-    const faderRow = [];
-    const blankRow = [];
-
     for (let strip = 1; strip <= 8; strip += 1) {
       const assignment = bank.strips.get(strip);
       const state = bankState.get(strip);
@@ -175,8 +172,6 @@ class RuntimeEngine {
       gainRow.push(hasGain ? this.formatIntCell(state.gainInt) : '    ');
       soloRow.push(hasSolo ? this.formatToggleCell(state.soloOn, 'S') : '    ');
       muteRow.push(hasMute ? this.formatToggleCell(state.muteOn, 'M') : '    ');
-      faderRow.push(hasMix ? this.formatIntCell(state.faderInt) : '    ');
-      blankRow.push('    ');
     }
 
     this.logger.log(labels);
@@ -186,10 +181,32 @@ class RuntimeEngine {
     this.logger.log(this.renderAsciiRow(soloRow));
     this.logger.log(this.renderAsciiRow(muteRow));
     this.logger.log(separator);
-    this.logger.log(this.renderAsciiRow(blankRow));
-    this.logger.log(this.renderAsciiRow(faderRow));
-    this.logger.log(this.renderAsciiRow(blankRow));
+    this.renderRunFaderTrackRows(bank, bankState);
     this.logger.log(separator);
+  }
+
+  renderRunFaderTrackRows(bank, bankState) {
+    for (let level = 10; level >= 0; level -= 1) {
+      const row = [];
+
+      for (let strip = 1; strip <= 8; strip += 1) {
+        const assignment = bank.strips.get(strip);
+        if (!assignment || !assignment.capabilities.has('mix')) {
+          row.push('    ');
+          continue;
+        }
+
+        const stripState = bankState.get(strip);
+        const faderInt = stripState ? stripState.faderInt : null;
+        if (faderInt === level) {
+          row.push(this.formatIntCell(level));
+        } else {
+          row.push('    ');
+        }
+      }
+
+      this.logger.log(this.renderAsciiRow(row));
+    }
   }
 
   renderAsciiLabels() {
