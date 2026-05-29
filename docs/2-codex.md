@@ -369,6 +369,21 @@ Errors must remain readable for live usage.
 
 Keep terminal logs concise and useful for live debugging.
 
+Runtime display modes:
+- `debug` mode:
+  - append-only logs
+  - no terminal clear
+  - full websocket unavailable traces (`WS indisponible...`) remain visible
+- `run` mode (and `prod` alias):
+  - no clear during startup sequence (config selection, MIDI detection, startup banner)
+  - clear is allowed only on runtime actions after startup
+  - compact live screen must include:
+    - mapping title
+    - current bank
+    - last action
+    - fader ASCII table for strips 1..8
+  - table shows integer `0..10` values for gain/fader, plus solo/mute markers
+
 Examples:
 - loaded config
 - selected bank
@@ -397,6 +412,8 @@ Implementation is complete when:
 - adding a new config requires zero JS mapping code modification
 - no runtime dependency on `./ui12-web/`
 - live behavior remains stable
+- `UI_MODE` supports `debug`, `run`, and `prod` (`prod` aliases `run`)
+- `run` mode renders compact screen + fader ASCII table and keeps startup logs visible
 
 ---
 

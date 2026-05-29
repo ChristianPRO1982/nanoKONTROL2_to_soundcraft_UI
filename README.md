@@ -92,6 +92,27 @@ npm start
 
 ---
 
+## Runtime display mode (`.env`)
+
+The runtime supports two terminal display modes controlled by `UI_MODE`.
+
+Create `ui12-midi/.env`:
+
+```env
+UI_MODE=debug
+# UI_MODE=run
+# UI_MODE=prod
+# UI12_HOST=10.10.1.1
+```
+
+Mode behavior:
+
+* `debug` (default): verbose append-only logs, no terminal clear.
+* `run`: compact live screen, terminal clear on runtime actions, fader ASCII table.
+* `prod`: alias of `run`.
+
+---
+
 ## Tests
 
 ```bash
@@ -112,6 +133,11 @@ The runtime will:
 4. Connect to the nanoKONTROL2
 5. Start the live runtime
 
+In `run/prod` mode:
+
+* startup logs stay visible (no clear during initialization),
+* screen clearing starts only when first runtime action is received.
+
 ---
 
 # 🎚️ Features
@@ -120,6 +146,7 @@ The runtime will:
 
 * MIDI input support
 * WebSocket communication with UI12
+* Debug/run terminal display modes (`UI_MODE`)
 * Physical faders
 * Gain knobs
 * Solo buttons
@@ -130,6 +157,7 @@ The runtime will:
 * Stereo group abstraction
 * Config-driven mappings
 * Multiple reusable live profiles
+* Live fader ASCII table in run mode (gain/solo/mute/fader view)
 
 ---
 
@@ -275,6 +303,7 @@ Meaning:
 * `docs/`: architecture and development guidance used during implementation.
 * `ui12-midi/`: production runtime (Node.js bridge between nanoKONTROL2 and Soundcraft UI12).
 * `ui12-midi/configs/`: live mapping profiles (`.map`) loaded at startup.
+* `ui12-midi/.env`: optional runtime environment overrides (`UI_MODE`, `UI12_HOST`).
 * `ui12-web/`: reverse-engineering workspace for UI12 web interface (not production runtime).
 
 ---
