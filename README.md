@@ -130,7 +130,7 @@ The runtime will:
 1. Scan available configurations
 2. Ask which live setup to load
 3. Connect to the UI12
-4. Connect to the nanoKONTROL2
+4. Connect to nanoKONTROL2 MIDI IN and MIDI OUT
 5. Start the live runtime
 
 In `run/prod` mode:
@@ -145,12 +145,19 @@ In `run/prod` mode:
 ## Already working
 
 * MIDI input support
+* MIDI output support (nanoKONTROL2 LEDs)
 * WebSocket communication with UI12
+* UI12 feedback parsing and local state store (`SETD`)
 * Debug/run terminal display modes (`UI_MODE`)
 * Physical faders
 * Gain knobs
 * Solo buttons
 * Mute buttons
+* `S` LEDs reflect confirmed UI12 solo state
+* `M` LEDs reflect confirmed UI12 mute state
+* `R` LEDs blink on fader/UI12 mix mismatch (hysteresis-based)
+* LED full refresh on bank switch and websocket reconnect
+* Periodic LED recovery render for live robustness
 * Multiple banks
 * MP3 transport controls
 * Auto/manual playback toggle
@@ -158,6 +165,27 @@ In `run/prod` mode:
 * Config-driven mappings
 * Multiple reusable live profiles
 * Live fader ASCII table in run mode (gain/solo/mute/fader view)
+
+---
+
+# 💡 LED feedback (V3)
+
+The runtime is now bidirectional for live feedback:
+
+```text
+nanoKONTROL2 -> UI12 controls
+UI12 -> nanoKONTROL2 LEDs
+```
+
+Rules currently implemented:
+
+* UI12 feedback is the source of truth for `S/M` LEDs.
+* Physical `S/M` presses do not light LEDs optimistically; LEDs update on confirmed UI12 `SETD`.
+* `R` LEDs (record row) are used as mismatch warning indicators for non-motorized faders.
+* `R` blinks when `|physicalFader - ui12Mix|` is above dirty threshold and stops when below clean threshold.
+* Step-2 defaults: `dirty=0.06`, `clean=0.04`, `blink=400ms`, startup blink phase ON.
+* Stereo references for feedback use left-side channel priority (`*.0`) for `line/player`.
+* No soft takeover or pickup blocking is applied: faders still send values normally.
 
 ---
 
@@ -331,7 +359,7 @@ Contracts define:
 * aliases,
 * protocol behavior,
 * transport actions,
-* controller layout.
+* controller layout and LED runtime parameters (OUT port, blink interval, hysteresis thresholds, preflight SysEx).
 
 They do NOT define live setups.
 
@@ -399,12 +427,10 @@ Possible future extensions:
 * UI24R support
 * AUX support
 * FX support
-* bidirectional synchronization
-* LED feedback
+* extended bidirectional synchronization (beyond current LEDs)
 * web mapping editor
 * OSC bridge
 * multiple controller support
-* auto reconnect
 * preset switching
 * scene management
 
@@ -416,6 +442,8 @@ Current state:
 
 * contract-driven runtime engine
 * `.map`-driven live profiles
+* UI12-confirmed `S/M` LED feedback
+* `R` LED mismatch blinking with hysteresis
 * terminal-only operation
 
 ---

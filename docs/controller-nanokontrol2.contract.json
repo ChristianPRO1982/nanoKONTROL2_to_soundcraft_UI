@@ -132,7 +132,7 @@
   "notes": [
     "The runtime automatically infers mix/gain/mute/solo from physical controls.",
     "The configuration files only map logical targets.",
-    "Record buttons are intentionally reserved for future features.",
+    "Record button press action is intentionally reserved, but the record-row LEDs are used for mismatch warning output.",
     "Transport buttons remain global and bank-independent."
   ]
 }

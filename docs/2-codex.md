@@ -1,5 +1,11 @@
 # Refactor configuration-driven architecture for nanoKONTROL2 ↔ Soundcraft UI12 bridge
 
+## Implementation status note (2026)
+
+The runtime now includes V3 feedback behavior:
+- UI12-confirmed `S/M` LED feedback on nanoKONTROL2
+- `R` LED mismatch blinking based on physical fader vs UI12 `*.mix` hysteresis
+
 ## Context
 
 The current implementation directly hardcodes:
@@ -264,7 +270,7 @@ Architecture must allow future support for:
 - FX
 - AUX
 - more banks
-- LEDs
+- advanced LED modes beyond current S/M feedback and R mismatch warning
 - motorized controllers
 - bidirectional synchronization
 - multiple MIDI devices
