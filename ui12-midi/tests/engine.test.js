@@ -56,7 +56,7 @@ function makeProfile() {
   };
 }
 
-function makeEngine() {
+function makeEngine(profile = makeProfile(), options = {}) {
   const sentSet = [];
   const sentRaw = [];
   const logs = [];
@@ -78,19 +78,31 @@ function makeEngine() {
     error(message) {
       logs.push(`ERR:${message}`);
     },
+    clear() {
+      logs.push('__CLEAR__');
+    },
   };
 
   const midiInput = { on() {} };
 
   const engine = new RuntimeEngine({
     contracts: makeContracts(),
-    resolvedProfile: makeProfile(),
+    resolvedProfile: profile,
     midiInput,
     wsClient,
     logger,
+    uiMode: options.uiMode || 'debug',
   });
 
   return { engine, sentSet, sentRaw, logs };
+}
+
+function getLastRunScreen(logs) {
+  const clearIndex = logs.lastIndexOf('__CLEAR__');
+  if (clearIndex === -1) {
+    return [];
+  }
+  return logs.slice(clearIndex + 1);
 }
 
 test('scaleContinuousMidi maps MIDI range to float range', () => {
@@ -141,4 +153,157 @@ test('engine toggles play mode manual/auto via cycle', () => {
     { path: 'settings.playMode', value: 3 },
     { path: 'settings.playMode', value: 0 },
   ]);
+});
+
+test('engine start logs profile banner before banks and without legacy config line', () => {
+  const { engine, logs } = makeEngine();
+
+  engine.start();
+
+  const separator = '='.repeat(50);
+  const topIndex = logs.indexOf(separator);
+  const titleIndex = logs.indexOf('test');
+  const bottomIndex = logs.indexOf(separator, topIndex + 1);
+  const banksIndex = logs.indexOf('Banques actives: 1, 2');
+  const bankLineIndex = logs.indexOf('=== BANK 1 ===');
+
+  assert.notEqual(topIndex, -1);
+  assert.notEqual(titleIndex, -1);
+  assert.notEqual(bottomIndex, -1);
+  assert.notEqual(banksIndex, -1);
+  assert.notEqual(bankLineIndex, -1);
+  assert.ok(topIndex < titleIndex);
+  assert.ok(titleIndex < bottomIndex);
+  assert.ok(bottomIndex < banksIndex);
+  assert.ok(banksIndex < bankLineIndex);
+  assert.equal(logs.some(line => line.startsWith('Config chargée:')), false);
+});
+
+test('engine profile header falls back to "sans nom" when meta name is absent', () => {
+  const profileWithoutName = makeProfile();
+  profileWithoutName.meta = {};
+  const { engine, logs } = makeEngine(profileWithoutName);
+
+  engine.logProfileHeader();
+
+  assert.equal(logs.includes('sans nom'), true);
+});
+
+test('engine run mode renders compact screen and clears on actions', () => {
+  const { engine, logs } = makeEngine(makeProfile(), { uiMode: 'run' });
+
+  engine.start();
+  const clearCountAfterStart = logs.filter(line => line === '__CLEAR__').length;
+  assert.equal(clearCountAfterStart, 0);
+  assert.equal(logs.includes('test'), true);
+  assert.equal(logs.includes('=== BANK 1 ==='), true);
+
+  engine.handleCc({ controller: 62, value: 127 });
+  assert.equal(logs.includes('BANK 2'), true);
+  assert.equal(logs.includes('BANK:2'), true);
+
+  engine.onWsSendEvent({ type: 'set', status: 'sent', path: 'i.0.mix', value: 0.5 });
+  assert.equal(logs.includes('SET i.0.mix:0.5'), true);
+
+  const clearCountFinal = logs.filter(line => line === '__CLEAR__').length;
+  assert.equal(clearCountFinal > clearCountAfterStart, true);
+});
+
+test('engine run mode renders faders ascii with separator just after gain line', () => {
+  const { engine, logs, sentSet } = makeEngine(makeProfile(), { uiMode: 'run' });
+  const rowSeparator = '|----|----|----|----|----|----|----|----|';
+
+  engine.start();
+
+  engine.handleCc({ controller: 16, value: 64 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+
+  engine.handleCc({ controller: 32, value: 127 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+
+  engine.handleCc({ controller: 48, value: 127 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+
+  engine.handleCc({ controller: 0, value: 127 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+
+  const screen = getLastRunScreen(logs);
+
+  assert.equal(screen[0], 'test');
+  assert.equal(screen[1], '='.repeat(50));
+  assert.equal(screen[2], 'BANK 1');
+  assert.equal(screen[3], '-'.repeat(50));
+  assert.equal(screen[4].startsWith('SET i.0.mix:'), true);
+  assert.equal(screen[5], '');
+  assert.equal(screen[6], '');
+
+  assert.equal(screen[7].includes('F1'), true);
+  assert.equal(screen[7].includes('F8'), true);
+  assert.equal(screen[8], rowSeparator);
+  assert.equal(screen[9].includes('  5 '), true);
+  assert.equal(screen[10], rowSeparator);
+  assert.equal(screen[11].includes('  S '), true);
+  assert.equal(screen[12].includes('  M '), true);
+  assert.equal(screen[13], rowSeparator);
+  assert.equal(screen[14], '|    |    |    |    |    |    |    |    |');
+  assert.equal(screen[15].includes(' 10 '), true);
+  assert.equal(screen[16], '|    |    |    |    |    |    |    |    |');
+  assert.equal(screen[17], rowSeparator);
+});
+
+test('engine run mode keeps ascii state per bank', () => {
+  const { engine, logs, sentSet } = makeEngine(makeProfile(), { uiMode: 'run' });
+
+  engine.start();
+
+  engine.handleCc({ controller: 0, value: 127 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+  let screen = getLastRunScreen(logs);
+  assert.equal(screen[2], 'BANK 1');
+  assert.equal(screen[15].includes(' 10 '), true);
+
+  engine.handleCc({ controller: 62, value: 127 });
+  screen = getLastRunScreen(logs);
+  assert.equal(screen[2], 'BANK 2');
+  assert.equal(screen[9], '|    |    |    |    |    |    |    |    |');
+
+  engine.handleCc({ controller: 0, value: 64 });
+  engine.onWsSendEvent({
+    type: 'set',
+    status: 'sent',
+    path: sentSet[sentSet.length - 1].path,
+    value: sentSet[sentSet.length - 1].value,
+  });
+  screen = getLastRunScreen(logs);
+  assert.equal(screen[15].includes('  5 '), true);
+
+  engine.handleCc({ controller: 61, value: 127 });
+  screen = getLastRunScreen(logs);
+  assert.equal(screen[2], 'BANK 1');
+  assert.equal(screen[15].includes(' 10 '), true);
 });

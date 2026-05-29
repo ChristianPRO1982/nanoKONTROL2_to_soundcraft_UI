@@ -1,15 +1,32 @@
 const WebSocket = require('ws');
+const { normalizeUiMode } = require('./uiMode');
 
 class Ui12WsClient {
   constructor(options) {
     this.host = options.host;
     this.connection = options.connection;
     this.logger = options.logger || console;
+    this.uiMode = normalizeUiMode(options.uiMode);
+    this.onSendEvent = options.onSendEvent || null;
     this.reconnectDelayMs = options.reconnectDelayMs || 2000;
 
     this._ws = null;
     this._closing = false;
     this._keepAliveTimer = null;
+  }
+
+  setSendEventHandler(handler) {
+    this.onSendEvent = typeof handler === 'function' ? handler : null;
+  }
+
+  shouldLogVerbose() {
+    return this.uiMode === 'debug';
+  }
+
+  _emitSendEvent(event) {
+    if (typeof this.onSendEvent === 'function') {
+      this.onSendEvent(event);
+    }
   }
 
   get isOpen() {
@@ -39,13 +56,17 @@ class Ui12WsClient {
     this._ws = new WebSocket(url);
 
     this._ws.on('open', () => {
-      this.logger.log(`UI12 websocket connecté (${this.host})`);
+      if (this.shouldLogVerbose()) {
+        this.logger.log(`UI12 websocket connecté (${this.host})`);
+      }
       this._startKeepAlive();
     });
 
     this._ws.on('close', (code, reasonBuffer) => {
       const reason = reasonBuffer ? reasonBuffer.toString() : '';
-      this.logger.log(`UI12 websocket déconnecté code=${code} reason=${reason}`);
+      if (this.shouldLogVerbose()) {
+        this.logger.log(`UI12 websocket déconnecté code=${code} reason=${reason}`);
+      }
       if (this._keepAliveTimer) {
         clearInterval(this._keepAliveTimer);
         this._keepAliveTimer = null;
@@ -57,7 +78,9 @@ class Ui12WsClient {
     });
 
     this._ws.on('error', error => {
-      this.logger.error(`UI12 websocket erreur: ${error.message}`);
+      if (this.shouldLogVerbose()) {
+        this.logger.error(`UI12 websocket erreur: ${error.message}`);
+      }
     });
   }
 
@@ -75,19 +98,27 @@ class Ui12WsClient {
 
   sendSet(path, value) {
     if (!this.isOpen) {
-      this.logger.log(`WS indisponible, SET ignoré: ${path}=${value}`);
+      this._emitSendEvent({ type: 'set', status: 'skipped', path, value });
+      if (this.shouldLogVerbose()) {
+        this.logger.log(`WS indisponible, SET ignoré: ${path}=${value}`);
+      }
       return;
     }
 
+    this._emitSendEvent({ type: 'set', status: 'sent', path, value });
     this._ws.send(`${this.connection.setPrefix}${path}^${value}`);
   }
 
   sendRaw(command) {
     if (!this.isOpen) {
-      this.logger.log(`WS indisponible, RAW ignoré: ${command}`);
+      this._emitSendEvent({ type: 'raw', status: 'skipped', command });
+      if (this.shouldLogVerbose()) {
+        this.logger.log(`WS indisponible, RAW ignoré: ${command}`);
+      }
       return;
     }
 
+    this._emitSendEvent({ type: 'raw', status: 'sent', command });
     this._ws.send(`${this.connection.rawPrefix}${command}`);
   }
 }

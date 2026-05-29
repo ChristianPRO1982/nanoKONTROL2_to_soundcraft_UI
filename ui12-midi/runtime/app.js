@@ -1,4 +1,5 @@
 const easymidi = require('easymidi');
+const path = require('path');
 
 const { loadContracts } = require('./contracts');
 const {
@@ -10,6 +11,8 @@ const {
 const { buildResolvedBanks } = require('./mapping');
 const { Ui12WsClient } = require('./wsClient');
 const { RuntimeEngine } = require('./engine');
+const { readUiModeFromEnv } = require('./uiMode');
+const { loadEnvFile } = require('./env');
 
 function resolveMidiInputName(midiInputs, defaultName) {
   if (defaultName && midiInputs.includes(defaultName)) {
@@ -26,6 +29,8 @@ function resolveMidiInputName(midiInputs, defaultName) {
 
 async function bootstrap(options = {}) {
   const logger = options.logger || console;
+  loadEnvFile(path.resolve(__dirname, '../.env'), { override: true });
+  const uiMode = readUiModeFromEnv();
   const contracts = loadContracts();
 
   const configFiles = discoverMapFiles(getConfigsDir());
@@ -38,6 +43,9 @@ async function bootstrap(options = {}) {
 
   const parsedMap = loadMapConfig(selectedConfig.filePath);
   const resolvedProfile = buildResolvedBanks(parsedMap, contracts.aliases);
+  if (!resolvedProfile.meta.name || !resolvedProfile.meta.name.trim()) {
+    resolvedProfile.meta.name = selectedConfig.name;
+  }
 
   resolvedProfile.warnings.forEach(warning => logger.log(`Warning: ${warning}`));
 
@@ -66,6 +74,7 @@ async function bootstrap(options = {}) {
     host: ui12Host,
     connection: contracts.ui12.connection,
     logger,
+    uiMode,
   });
 
   const engine = new RuntimeEngine({
@@ -74,7 +83,9 @@ async function bootstrap(options = {}) {
     midiInput,
     wsClient,
     logger,
+    uiMode,
   });
+  wsClient.setSendEventHandler(event => engine.onWsSendEvent(event));
 
   engine.start();
 

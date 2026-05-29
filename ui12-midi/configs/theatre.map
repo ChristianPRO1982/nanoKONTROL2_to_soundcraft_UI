@@ -1,5 +1,5 @@
 [meta]
-name = theatre-abigaelle-2026
+name = théâtre Abigaëlle - 2026
 
 [bank:1]
 f1 = i1
@@ -11,9 +11,3 @@ f6 = player
 f7 = i7
 f8 = master
 
-[bank:2]
-f1 = line
-f2 = player
-f6 = sub1
-f7 = sub2
-f8 = master
